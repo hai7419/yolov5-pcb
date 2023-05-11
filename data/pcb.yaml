@@ -1,6 +1,6 @@
 
 
-path: datasets/pcb  # dataset root dir
+path: ../datasets/pcb  # dataset root dir
 train: images/train  # train images (relative to 'path') 128 images
 val: images/train  # val images (relative to 'path') 128 images
 test:  # test images (optional)
