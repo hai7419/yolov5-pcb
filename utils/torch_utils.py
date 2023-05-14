@@ -290,6 +290,10 @@ def model_info(model, verbose=False, imgsz=640):
     except Exception:
         fs = ''
 
+    for layer in model.modules():
+        print(f'{layer}')
+
+
     name = Path(model.yaml_file).stem.replace('yolov5', 'YOLOv5') if hasattr(model, 'yaml_file') else 'Model'
     LOGGER.info(f'{name} summary: {len(list(model.modules()))} layers, {n_p} parameters, {n_g} gradients{fs}')
 

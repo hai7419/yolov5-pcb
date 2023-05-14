@@ -139,13 +139,13 @@ def create_dataloader(path,
     nd = torch.cuda.device_count()  # number of CUDA devices
     nw = min([os.cpu_count() // max(nd, 1), batch_size if batch_size > 1 else 0, workers])  # number of workers
     sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
-    loader = DataLoader if image_weights else InfiniteDataLoader  # only DataLoader allows for attribute updates
+    loader = DataLoader #if image_weights else InfiniteDataLoader  # only DataLoader allows for attribute updates
     generator = torch.Generator()
     generator.manual_seed(6148914691236517205 + seed + RANK)
     return loader(dataset,
                   batch_size=batch_size,
                   shuffle=shuffle and sampler is None,
-                  num_workers=nw,
+                  num_workers=1,
                   sampler=sampler,
                   pin_memory=PIN_MEMORY,
                   collate_fn=LoadImagesAndLabels.collate_fn4 if quad else LoadImagesAndLabels.collate_fn,
@@ -568,24 +568,24 @@ class LoadImagesAndLabels(Dataset):
             self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(int) * stride
 
         # Cache images into RAM/disk for faster training
-        if cache_images == 'ram' and not self.check_cache_ram(prefix=prefix):
-            cache_images = False
-        self.ims = [None] * n
-        self.npy_files = [Path(f).with_suffix('.npy') for f in self.im_files]
-        if cache_images:
-            b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
-            self.im_hw0, self.im_hw = [None] * n, [None] * n
-            fcn = self.cache_images_to_disk if cache_images == 'disk' else self.load_image
-            results = ThreadPool(NUM_THREADS).imap(fcn, range(n))
-            pbar = tqdm(enumerate(results), total=n, bar_format=TQDM_BAR_FORMAT, disable=LOCAL_RANK > 0)
-            for i, x in pbar:
-                if cache_images == 'disk':
-                    b += self.npy_files[i].stat().st_size
-                else:  # 'ram'
-                    self.ims[i], self.im_hw0[i], self.im_hw[i] = x  # im, hw_orig, hw_resized = load_image(self, i)
-                    b += self.ims[i].nbytes
-                pbar.desc = f'{prefix}Caching images ({b / gb:.1f}GB {cache_images})'
-            pbar.close()
+        # if cache_images == 'ram' and not self.check_cache_ram(prefix=prefix):
+        #     cache_images = False
+        # self.ims = [None] * n
+        # self.npy_files = [Path(f).with_suffix('.npy') for f in self.im_files]
+        # if cache_images:
+        #     b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
+        #     self.im_hw0, self.im_hw = [None] * n, [None] * n
+        #     fcn = self.cache_images_to_disk if cache_images == 'disk' else self.load_image
+        #     results = ThreadPool(NUM_THREADS).imap(fcn, range(n))
+        #     pbar = tqdm(enumerate(results), total=n, bar_format=TQDM_BAR_FORMAT, disable=LOCAL_RANK > 0)
+        #     for i, x in pbar:
+        #         if cache_images == 'disk':
+        #             b += self.npy_files[i].stat().st_size
+        #         else:  # 'ram'
+        #             self.ims[i], self.im_hw0[i], self.im_hw[i] = x  # im, hw_orig, hw_resized = load_image(self, i)
+        #             b += self.ims[i].nbytes
+        #         pbar.desc = f'{prefix}Caching images ({b / gb:.1f}GB {cache_images})'
+        #     pbar.close()
 
     def check_cache_ram(self, safety_margin=0.1, prefix=''):
         # Check image caching requirements vs available memory
@@ -655,15 +655,15 @@ class LoadImagesAndLabels(Dataset):
         index = self.indices[index]  # linear, shuffled, or image_weights
 
         hyp = self.hyp
-        mosaic = self.mosaic and random.random() < hyp['mosaic']
+        mosaic = self.mosaic #and random.random() < hyp['mosaic']
         if mosaic:
             # Load mosaic
             img, labels = self.load_mosaic(index)
             shapes = None
 
             # MixUp augmentation
-            if random.random() < hyp['mixup']:
-                img, labels = mixup(img, labels, *self.load_mosaic(random.randint(0, self.n - 1)))
+            # if random.random() < hyp['mixup']:
+            #     img, labels = mixup(img, labels, *self.load_mosaic(random.randint(0, self.n - 1)))
 
         else:
             # Load image
@@ -692,28 +692,29 @@ class LoadImagesAndLabels(Dataset):
             labels[:, 1:5] = xyxy2xywhn(labels[:, 1:5], w=img.shape[1], h=img.shape[0], clip=True, eps=1E-3)
 
         if self.augment:
+            pass
             # Albumentations
-            img, labels = self.albumentations(img, labels)
-            nl = len(labels)  # update after albumentations
+            # img, labels = self.albumentations(img, labels)
+            # nl = len(labels)  # update after albumentations
 
-            # HSV color-space
-            augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
+            # # HSV color-space
+            # augment_hsv(img, hgain=hyp['hsv_h'], sgain=hyp['hsv_s'], vgain=hyp['hsv_v'])
 
-            # Flip up-down
-            if random.random() < hyp['flipud']:
-                img = np.flipud(img)
-                if nl:
-                    labels[:, 2] = 1 - labels[:, 2]
+            # # Flip up-down
+            # if random.random() < hyp['flipud']:
+            #     img = np.flipud(img)
+            #     if nl:
+            #         labels[:, 2] = 1 - labels[:, 2]
 
-            # Flip left-right
-            if random.random() < hyp['fliplr']:
-                img = np.fliplr(img)
-                if nl:
-                    labels[:, 1] = 1 - labels[:, 1]
+            # # Flip left-right
+            # if random.random() < hyp['fliplr']:
+            #     img = np.fliplr(img)
+            #     if nl:
+            #         labels[:, 1] = 1 - labels[:, 1]
 
-            # Cutouts
-            # labels = cutout(img, labels, p=0.5)
-            # nl = len(labels)  # update after cutout
+            # # Cutouts
+            # # labels = cutout(img, labels, p=0.5)
+            # # nl = len(labels)  # update after cutout
 
         labels_out = torch.zeros((nl, 6))
         if nl:
@@ -727,20 +728,28 @@ class LoadImagesAndLabels(Dataset):
 
     def load_image(self, i):
         # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
-        im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i],
-        if im is None:  # not cached in RAM
-            if fn.exists():  # load npy
-                im = np.load(fn)
-            else:  # read image
-                im = cv2.imread(f)  # BGR
-                assert im is not None, f'Image Not Found {f}'
-            h0, w0 = im.shape[:2]  # orig hw
-            r = self.img_size / max(h0, w0)  # ratio
-            if r != 1:  # if sizes are not equal
-                interp = cv2.INTER_LINEAR if (self.augment or r > 1) else cv2.INTER_AREA
-                im = cv2.resize(im, (math.ceil(w0 * r), math.ceil(h0 * r)), interpolation=interp)
-            return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
-        return self.ims[i], self.im_hw0[i], self.im_hw[i]  # im, hw_original, hw_resized
+        # im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i],
+        # if im is None:  # not cached in RAM
+        #     if fn.exists():  # load npy
+        #         im = np.load(fn)
+        #     else:  # read image
+        #         im = cv2.imread(f)  # BGR
+        #         assert im is not None, f'Image Not Found {f}'
+        #     h0, w0 = im.shape[:2]  # orig hw
+        #     r = self.img_size / max(h0, w0)  # ratio
+        #     if r != 1:  # if sizes are not equal
+        #         interp = cv2.INTER_LINEAR if (self.augment or r > 1) else cv2.INTER_AREA
+        #         im = cv2.resize(im, (math.ceil(w0 * r), math.ceil(h0 * r)), interpolation=interp)
+        #     return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
+        # return self.ims[i], self.im_hw0[i], self.im_hw[i]  # im, hw_original, hw_resized
+
+        im = cv2.imread(self.im_files[i])
+        h0,w0 = im.shape[:2]  #[h,w,c]
+        r = self.img_size / max(h0,w0)
+        if r != 1:
+            im = cv2.resize(im,(math.ceil(w0 * r), math.ceil(h0 * r)),interpolation=cv2.INTER_AREA)
+
+        return im,(h0,w0),im.shape[:2]
 
     def cache_images_to_disk(self, i):
         # Saves an image as an *.npy file for faster loading
@@ -793,7 +802,7 @@ class LoadImagesAndLabels(Dataset):
         # img4, labels4 = replicate(img4, labels4)  # replicate
 
         # Augment
-        img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'])
+        # img4, labels4, segments4 = copy_paste(img4, labels4, segments4, p=self.hyp['copy_paste'])
         img4, labels4 = random_perspective(img4,
                                            labels4,
                                            segments4,

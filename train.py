@@ -61,7 +61,7 @@ from utils.plots import plot_evolve
 from utils.torch_utils import (EarlyStopping, ModelEMA, de_parallel, select_device, smart_DDP, smart_optimizer,
                                smart_resume, torch_distributed_zero_first)
 
-
+from PIL import Image,ImageDraw,ExifTags,ImageOps
 #import wandb
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv('RANK', -1))
@@ -201,7 +201,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                                               cache=None if opt.cache == 'val' else opt.cache,
                                               rect=opt.rect,
                                               rank=LOCAL_RANK,
-                                              workers=workers,
+                                              workers=1,
                                               image_weights=opt.image_weights,
                                               quad=opt.quad,
                                               prefix=colorstr('train: '),
@@ -215,14 +215,14 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     if RANK in {-1, 0}:
         val_loader = create_dataloader(val_path,
                                        imgsz,
-                                       batch_size // WORLD_SIZE * 2,
+                                       batch_size ,
                                        gs,
                                        single_cls,
                                        hyp=hyp,
                                        cache=None if noval else opt.cache,
                                        rect=True,
                                        rank=-1,
-                                       workers=workers * 2,
+                                       workers=1,
                                        pad=0.5,
                                        prefix=colorstr('val: '))[0]
 
@@ -274,10 +274,10 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         model.train()
 
         # Update image weights (optional, single-GPU only)
-        if opt.image_weights:
-            cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
-            iw = labels_to_image_weights(dataset.labels, nc=nc, class_weights=cw)  # image weights
-            dataset.indices = random.choices(range(dataset.n), weights=iw, k=dataset.n)  # rand weighted idx
+        # if opt.image_weights:
+        #     # cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
+            # iw = labels_to_image_weights(dataset.labels, nc=nc, class_weights=cw)  # image weights
+            # dataset.indices = random.choices(range(dataset.n), weights=iw, k=dataset.n)  # rand weighted idx
 
         # Update mosaic border (optional)
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
@@ -292,6 +292,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             pbar = tqdm(pbar, total=nb, bar_format=TQDM_BAR_FORMAT)  # progress bar
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
+            
+            # draw_targets(imgs,targets)
+            
             callbacks.run('on_train_batch_start')
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float() / 255  # uint8 to float32, 0-255 to 0.0-1.0
@@ -301,19 +304,19 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                 xi = [0, nw]  # x interp
                 # compute_loss.gr = np.interp(ni, xi, [0.0, 1.0])  # iou loss ratio (obj_loss = 1.0 or iou)
                 accumulate = max(1, np.interp(ni, xi, [1, nbs / batch_size]).round())
-                for j, x in enumerate(optimizer.param_groups):
-                    # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                    x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
-                    if 'momentum' in x:
-                        x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])
+                # for j, x in enumerate(optimizer.param_groups):
+                #     # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                #     x['lr'] = np.interp(ni, xi, [hyp['warmup_bias_lr'] if j == 0 else 0.0, x['initial_lr'] * lf(epoch)])
+                #     if 'momentum' in x:
+                #         x['momentum'] = np.interp(ni, xi, [hyp['warmup_momentum'], hyp['momentum']])
 
             # Multi-scale
-            if opt.multi_scale:
-                sz = random.randrange(int(imgsz * 0.5), int(imgsz * 1.5) + gs) // gs * gs  # size
-                sf = sz / max(imgs.shape[2:])  # scale factor
-                if sf != 1:
-                    ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
-                    imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
+            # if opt.multi_scale:
+            #     sz = random.randrange(int(imgsz * 0.5), int(imgsz * 1.5) + gs) // gs * gs  # size
+            #     sf = sz / max(imgs.shape[2:])  # scale factor
+            #     if sf != 1:
+            #         ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
+            #         imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
             # Forward
             with torch.cuda.amp.autocast(amp):
@@ -456,6 +459,44 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     return results
 
 
+
+class_name = ['missing_hole','mouse_bite','open_circuit','short','spur','spurious_copper']
+
+def xywh2xyxy(x,w=640,h=640):
+    y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
+    y[..., 2] = w * (x[..., 2] - x[..., 4] / 2)   # top left x
+    y[..., 3] = h * (x[..., 3] - x[..., 5] / 2)   # top left y
+    y[..., 4] = w * (x[..., 2] + x[..., 4] / 2)   # bottom right x
+    y[..., 5] = h * (x[..., 3] + x[..., 5] / 2)   # bottom right
+    return y
+
+def draw_targets(img,labs):
+    """
+    input   img [batch channel h w ] type:tensor
+            labs [class,xywh]  type:tensor
+    output  draw image and target
+    
+    """    
+    shape = img.shape
+    labs = xywh2xyxy(labs,shape[2],shape[3])
+
+    for i in range(img.shape[0]):
+        # lb = torch.ones(labs.shape)
+        j = labs[:,0]==i
+        lb = labs[j]
+        im = Image.fromarray(img[i].numpy().transpose(1,2,0))
+        draw = ImageDraw.Draw(im)
+        for k in range(lb.shape[0]):
+
+            draw.rectangle(lb[k,2:].numpy(),outline='red')
+            draw.text(lb[k,2:4].numpy().astype(np.uint)+[0,-8],class_name[lb[k,1].numpy().astype(np.uint)],fill='red')
+        del draw
+        im.show()
+        im.save('D:\python\yolov5-mysely\ccc.jpg',format='png')
+
+
+
+
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default=ROOT / 'yolov5s.pt', help='initial weights path')
@@ -554,94 +595,94 @@ def main(opt, callbacks=Callbacks()):
 
     # Evolve hyperparameters (optional)
     else:
-        # Hyperparameter evolution metadata (mutation scale 0-1, lower_limit, upper_limit)
-        meta = {
-            'lr0': (1, 1e-5, 1e-1),  # initial learning rate (SGD=1E-2, Adam=1E-3)
-            'lrf': (1, 0.01, 1.0),  # final OneCycleLR learning rate (lr0 * lrf)
-            'momentum': (0.3, 0.6, 0.98),  # SGD momentum/Adam beta1
-            'weight_decay': (1, 0.0, 0.001),  # optimizer weight decay
-            'warmup_epochs': (1, 0.0, 5.0),  # warmup epochs (fractions ok)
-            'warmup_momentum': (1, 0.0, 0.95),  # warmup initial momentum
-            'warmup_bias_lr': (1, 0.0, 0.2),  # warmup initial bias lr
-            'box': (1, 0.02, 0.2),  # box loss gain
-            'cls': (1, 0.2, 4.0),  # cls loss gain
-            'cls_pw': (1, 0.5, 2.0),  # cls BCELoss positive_weight
-            'obj': (1, 0.2, 4.0),  # obj loss gain (scale with pixels)
-            'obj_pw': (1, 0.5, 2.0),  # obj BCELoss positive_weight
-            'iou_t': (0, 0.1, 0.7),  # IoU training threshold
-            'anchor_t': (1, 2.0, 8.0),  # anchor-multiple threshold
-            'anchors': (2, 2.0, 10.0),  # anchors per output grid (0 to ignore)
-            'fl_gamma': (0, 0.0, 2.0),  # focal loss gamma (efficientDet default gamma=1.5)
-            'hsv_h': (1, 0.0, 0.1),  # image HSV-Hue augmentation (fraction)
-            'hsv_s': (1, 0.0, 0.9),  # image HSV-Saturation augmentation (fraction)
-            'hsv_v': (1, 0.0, 0.9),  # image HSV-Value augmentation (fraction)
-            'degrees': (1, 0.0, 45.0),  # image rotation (+/- deg)
-            'translate': (1, 0.0, 0.9),  # image translation (+/- fraction)
-            'scale': (1, 0.0, 0.9),  # image scale (+/- gain)
-            'shear': (1, 0.0, 10.0),  # image shear (+/- deg)
-            'perspective': (0, 0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
-            'flipud': (1, 0.0, 1.0),  # image flip up-down (probability)
-            'fliplr': (0, 0.0, 1.0),  # image flip left-right (probability)
-            'mosaic': (1, 0.0, 1.0),  # image mixup (probability)
-            'mixup': (1, 0.0, 1.0),  # image mixup (probability)
-            'copy_paste': (1, 0.0, 1.0)}  # segment copy-paste (probability)
+        # # Hyperparameter evolution metadata (mutation scale 0-1, lower_limit, upper_limit)
+        # meta = {
+        #     'lr0': (1, 1e-5, 1e-1),  # initial learning rate (SGD=1E-2, Adam=1E-3)
+        #     'lrf': (1, 0.01, 1.0),  # final OneCycleLR learning rate (lr0 * lrf)
+        #     'momentum': (0.3, 0.6, 0.98),  # SGD momentum/Adam beta1
+        #     'weight_decay': (1, 0.0, 0.001),  # optimizer weight decay
+        #     'warmup_epochs': (1, 0.0, 5.0),  # warmup epochs (fractions ok)
+        #     'warmup_momentum': (1, 0.0, 0.95),  # warmup initial momentum
+        #     'warmup_bias_lr': (1, 0.0, 0.2),  # warmup initial bias lr
+        #     'box': (1, 0.02, 0.2),  # box loss gain
+        #     'cls': (1, 0.2, 4.0),  # cls loss gain
+        #     'cls_pw': (1, 0.5, 2.0),  # cls BCELoss positive_weight
+        #     'obj': (1, 0.2, 4.0),  # obj loss gain (scale with pixels)
+        #     'obj_pw': (1, 0.5, 2.0),  # obj BCELoss positive_weight
+        #     'iou_t': (0, 0.1, 0.7),  # IoU training threshold
+        #     'anchor_t': (1, 2.0, 8.0),  # anchor-multiple threshold
+        #     'anchors': (2, 2.0, 10.0),  # anchors per output grid (0 to ignore)
+        #     'fl_gamma': (0, 0.0, 2.0),  # focal loss gamma (efficientDet default gamma=1.5)
+        #     'hsv_h': (1, 0.0, 0.1),  # image HSV-Hue augmentation (fraction)
+        #     'hsv_s': (1, 0.0, 0.9),  # image HSV-Saturation augmentation (fraction)
+        #     'hsv_v': (1, 0.0, 0.9),  # image HSV-Value augmentation (fraction)
+        #     'degrees': (1, 0.0, 45.0),  # image rotation (+/- deg)
+        #     'translate': (1, 0.0, 0.9),  # image translation (+/- fraction)
+        #     'scale': (1, 0.0, 0.9),  # image scale (+/- gain)
+        #     'shear': (1, 0.0, 10.0),  # image shear (+/- deg)
+        #     'perspective': (0, 0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
+        #     'flipud': (1, 0.0, 1.0),  # image flip up-down (probability)
+        #     'fliplr': (0, 0.0, 1.0),  # image flip left-right (probability)
+        #     'mosaic': (1, 0.0, 1.0),  # image mixup (probability)
+        #     'mixup': (1, 0.0, 1.0),  # image mixup (probability)
+        #     'copy_paste': (1, 0.0, 1.0)}  # segment copy-paste (probability)
 
-        with open(opt.hyp, errors='ignore') as f:
-            hyp = yaml.safe_load(f)  # load hyps dict
-            if 'anchors' not in hyp:  # anchors commented in hyp.yaml
-                hyp['anchors'] = 3
-        if opt.noautoanchor:
-            del hyp['anchors'], meta['anchors']
-        opt.noval, opt.nosave, save_dir = True, True, Path(opt.save_dir)  # only val/save final epoch
-        # ei = [isinstance(x, (int, float)) for x in hyp.values()]  # evolvable indices
-        evolve_yaml, evolve_csv = save_dir / 'hyp_evolve.yaml', save_dir / 'evolve.csv'
-        if opt.bucket:
-            # download evolve.csv if exists
-            subprocess.run([
-                'gsutil',
-                'cp',
-                f'gs://{opt.bucket}/evolve.csv',
-                str(evolve_csv),])
+        # with open(opt.hyp, errors='ignore') as f:
+        #     hyp = yaml.safe_load(f)  # load hyps dict
+        #     if 'anchors' not in hyp:  # anchors commented in hyp.yaml
+        #         hyp['anchors'] = 3
+        # if opt.noautoanchor:
+        #     del hyp['anchors'], meta['anchors']
+        # opt.noval, opt.nosave, save_dir = True, True, Path(opt.save_dir)  # only val/save final epoch
+        # # ei = [isinstance(x, (int, float)) for x in hyp.values()]  # evolvable indices
+        # evolve_yaml, evolve_csv = save_dir / 'hyp_evolve.yaml', save_dir / 'evolve.csv'
+        # if opt.bucket:
+        #     # download evolve.csv if exists
+        #     subprocess.run([
+        #         'gsutil',
+        #         'cp',
+        #         f'gs://{opt.bucket}/evolve.csv',
+        #         str(evolve_csv),])
 
-        for _ in range(opt.evolve):  # generations to evolve
-            if evolve_csv.exists():  # if evolve.csv exists: select best hyps and mutate
-                # Select parent(s)
-                parent = 'single'  # parent selection method: 'single' or 'weighted'
-                x = np.loadtxt(evolve_csv, ndmin=2, delimiter=',', skiprows=1)
-                n = min(5, len(x))  # number of previous results to consider
-                x = x[np.argsort(-fitness(x))][:n]  # top n mutations
-                w = fitness(x) - fitness(x).min() + 1E-6  # weights (sum > 0)
-                if parent == 'single' or len(x) == 1:
-                    # x = x[random.randint(0, n - 1)]  # random selection
-                    x = x[random.choices(range(n), weights=w)[0]]  # weighted selection
-                elif parent == 'weighted':
-                    x = (x * w.reshape(n, 1)).sum(0) / w.sum()  # weighted combination
+        # for _ in range(opt.evolve):  # generations to evolve
+        #     if evolve_csv.exists():  # if evolve.csv exists: select best hyps and mutate
+        #         # Select parent(s)
+        #         parent = 'single'  # parent selection method: 'single' or 'weighted'
+        #         x = np.loadtxt(evolve_csv, ndmin=2, delimiter=',', skiprows=1)
+        #         n = min(5, len(x))  # number of previous results to consider
+        #         x = x[np.argsort(-fitness(x))][:n]  # top n mutations
+        #         w = fitness(x) - fitness(x).min() + 1E-6  # weights (sum > 0)
+        #         if parent == 'single' or len(x) == 1:
+        #             # x = x[random.randint(0, n - 1)]  # random selection
+        #             x = x[random.choices(range(n), weights=w)[0]]  # weighted selection
+        #         elif parent == 'weighted':
+        #             x = (x * w.reshape(n, 1)).sum(0) / w.sum()  # weighted combination
 
-                # Mutate
-                mp, s = 0.8, 0.2  # mutation probability, sigma
-                npr = np.random
-                npr.seed(int(time.time()))
-                g = np.array([meta[k][0] for k in hyp.keys()])  # gains 0-1
-                ng = len(meta)
-                v = np.ones(ng)
-                while all(v == 1):  # mutate until a change occurs (prevent duplicates)
-                    v = (g * (npr.random(ng) < mp) * npr.randn(ng) * npr.random() * s + 1).clip(0.3, 3.0)
-                for i, k in enumerate(hyp.keys()):  # plt.hist(v.ravel(), 300)
-                    hyp[k] = float(x[i + 7] * v[i])  # mutate
+        #         # Mutate
+        #         mp, s = 0.8, 0.2  # mutation probability, sigma
+        #         npr = np.random
+        #         npr.seed(int(time.time()))
+        #         g = np.array([meta[k][0] for k in hyp.keys()])  # gains 0-1
+        #         ng = len(meta)
+        #         v = np.ones(ng)
+        #         while all(v == 1):  # mutate until a change occurs (prevent duplicates)
+        #             v = (g * (npr.random(ng) < mp) * npr.randn(ng) * npr.random() * s + 1).clip(0.3, 3.0)
+        #         for i, k in enumerate(hyp.keys()):  # plt.hist(v.ravel(), 300)
+        #             hyp[k] = float(x[i + 7] * v[i])  # mutate
 
-            # Constrain to limits
-            for k, v in meta.items():
-                hyp[k] = max(hyp[k], v[1])  # lower limit
-                hyp[k] = min(hyp[k], v[2])  # upper limit
-                hyp[k] = round(hyp[k], 5)  # significant digits
+        #     # Constrain to limits
+        #     for k, v in meta.items():
+        #         hyp[k] = max(hyp[k], v[1])  # lower limit
+        #         hyp[k] = min(hyp[k], v[2])  # upper limit
+        #         hyp[k] = round(hyp[k], 5)  # significant digits
 
-            # Train mutation
-            results = train(hyp.copy(), opt, device, callbacks)
-            callbacks = Callbacks()
-            # Write mutation results
-            keys = ('metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/mAP_0.5:0.95', 'val/box_loss',
-                    'val/obj_loss', 'val/cls_loss')
-            print_mutation(keys, results, hyp.copy(), save_dir, opt.bucket)
+        #     # Train mutation
+        #     results = train(hyp.copy(), opt, device, callbacks)
+        #     callbacks = Callbacks()
+        #     # Write mutation results
+        #     keys = ('metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/mAP_0.5:0.95', 'val/box_loss',
+        #             'val/obj_loss', 'val/cls_loss')
+        #     print_mutation(keys, results, hyp.copy(), save_dir, opt.bucket)
 
         # Plot results
         plot_evolve(evolve_csv)
