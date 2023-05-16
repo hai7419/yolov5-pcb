@@ -137,23 +137,23 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     #amp = check_amp(model)  # check AMP
     amp = False 
     # Freeze
-    freeze = [f'model.{x}.' for x in (freeze if len(freeze) > 1 else range(freeze[0]))]  # layers to freeze
-    for k, v in model.named_parameters():
-        v.requires_grad = True  # train all layers
-        # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
-        if any(x in k for x in freeze):
-            LOGGER.info(f'freezing {k}')
-            v.requires_grad = False
+    # freeze = [f'model.{x}.' for x in (freeze if len(freeze) > 1 else range(freeze[0]))]  # layers to freeze
+    # for k, v in model.named_parameters():
+    #     v.requires_grad = True  # train all layers
+    #     # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
+    #     if any(x in k for x in freeze):
+    #         LOGGER.info(f'freezing {k}')
+    #         v.requires_grad = False
 
     # Image size
-    gs = max(int(model.stride.max()), 32)  # grid size (max stride)
-    imgsz = check_img_size(opt.imgsz, gs, floor=gs * 2)  # verify imgsz is gs-multiple
+    gs = 32 #= max(int(model.stride.max()), 32)  # grid size (max stride)
+    imgsz =  640 #check_img_size(opt.imgsz, gs, floor=gs * 2)  # verify imgsz is gs-multiple
 
     # Batch size
-    if RANK == -1 and batch_size == -1:  # single-GPU only, estimate best batch size
-        batch_size = check_train_batch_size(model, imgsz, amp)
-        loggers.on_params_update({'batch_size': batch_size})
-
+    # if RANK == -1 and batch_size == -1:  # single-GPU only, estimate best batch size
+    #     batch_size = check_train_batch_size(model, imgsz, amp)
+    #     loggers.on_params_update({'batch_size': batch_size})
+    batch_size = batch_size
     # Optimizer
     nbs = 4  # nominal batch size
     accumulate = max(round(nbs / batch_size), 1)  # accumulate loss before optimizing
@@ -186,9 +186,9 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         model = torch.nn.DataParallel(model)
 
     # SyncBatchNorm
-    if opt.sync_bn and cuda and RANK != -1:
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
-        LOGGER.info('Using SyncBatchNorm()')
+    # if opt.sync_bn and cuda and RANK != -1:
+    #     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
+    #     LOGGER.info('Using SyncBatchNorm()')
 
     # Trainloader
     train_loader, dataset = create_dataloader(train_path,
@@ -318,24 +318,33 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             #         ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
             #         imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
+            
+            pred = model(imgs)
+            loss, loss_items = compute_loss(pred, targets.to(device))
+            loss.backward()
+
             # Forward
-            with torch.cuda.amp.autocast(amp):
-                pred = model(imgs)  # forward
-                loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
-                if RANK != -1:
-                    loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
-                if opt.quad:
-                    loss *= 4.
+            # with torch.cuda.amp.autocast(amp):
+            #     pred = model(imgs)  # forward
+            #     loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+            #     if RANK != -1:
+            #         loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
+            #     if opt.quad:
+            #         loss *= 4.
 
             # Backward
-            scaler.scale(loss).backward()
+            # scaler.scale(loss).backward()
 
             # Optimize - https://pytorch.org/docs/master/notes/amp_examples.html
             if ni - last_opt_step >= accumulate:
-                scaler.unscale_(optimizer)  # unscale gradients
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
-                scaler.step(optimizer)  # optimizer.step
-                scaler.update()
+                # scaler.unscale_(optimizer)  # unscale gradients
+                # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)  # clip gradients
+                # scaler.step(optimizer)  # optimizer.step
+                # scaler.update()
+                
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
+                optimizer.step()
+                
                 optimizer.zero_grad()
                 if ema:
                     ema.update(model)
@@ -356,6 +365,13 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         lr = [x['lr'] for x in optimizer.param_groups]  # for loggers
         scheduler.step()
 
+        if epoch == 30:
+            pass
+        if epoch == 50:
+            pass
+        if epoch == 80:
+            pass
+        
         if RANK in {-1, 0}:
             # mAP
             callbacks.run('on_train_epoch_end', epoch=epoch)
