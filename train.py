@@ -323,7 +323,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             loss, loss_items = compute_loss(pred, targets.to(device))
             loss.backward()
             if epoch < 3:
-                print(pred[0])
+                print(targets[0])
+                print(targets[1])
             # Forward
             # with torch.cuda.amp.autocast(amp):
             #     pred = model(imgs)  # forward
