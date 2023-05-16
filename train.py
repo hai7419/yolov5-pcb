@@ -292,8 +292,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             pbar = tqdm(pbar, total=nb, bar_format=TQDM_BAR_FORMAT)  # progress bar
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-            
-            # draw_targets(imgs,targets)
+            if epoch < 3:
+                draw_targets(imgs,targets)
             
             callbacks.run('on_train_batch_start')
             ni = i + nb * epoch  # number integrated batches (since train start)
@@ -322,7 +322,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             pred = model(imgs)
             loss, loss_items = compute_loss(pred, targets.to(device))
             loss.backward()
-
+            if epoch < 3:
+                print[pred[0]]
             # Forward
             # with torch.cuda.amp.autocast(amp):
             #     pred = model(imgs)  # forward
@@ -505,10 +506,11 @@ def draw_targets(img,labs):
         for k in range(lb.shape[0]):
 
             draw.rectangle(lb[k,2:].numpy(),outline='red')
-            draw.text(lb[k,2:4].numpy().astype(np.uint)+[0,-8],class_name[lb[k,1].numpy().astype(np.uint)],fill='red')
+            #draw.text(lb[k,2:4].numpy().astype(np.uint)+[0,-8],class_name[lb[k,1].numpy().astype(np.uint)],fill='red')
         del draw
-        im.show()
-        im.save('D:\python\yolov5-mysely\ccc.jpg',format='png')
+        # im.show()
+        print(im.mode)
+        # im.save('D:\python\yolov5-mysely\ccc.jpg',format='png')
 
 
 
@@ -610,7 +612,7 @@ def main(opt, callbacks=Callbacks()):
         train(opt.hyp, opt, device, callbacks)
 
     # Evolve hyperparameters (optional)
-    else:
+    # else:
         # # Hyperparameter evolution metadata (mutation scale 0-1, lower_limit, upper_limit)
         # meta = {
         #     'lr0': (1, 1e-5, 1e-1),  # initial learning rate (SGD=1E-2, Adam=1E-3)
@@ -701,10 +703,10 @@ def main(opt, callbacks=Callbacks()):
         #     print_mutation(keys, results, hyp.copy(), save_dir, opt.bucket)
 
         # Plot results
-        plot_evolve(evolve_csv)
-        LOGGER.info(f'Hyperparameter evolution finished {opt.evolve} generations\n'
-                    f"Results saved to {colorstr('bold', save_dir)}\n"
-                    f'Usage example: $ python train.py --hyp {evolve_yaml}')
+        # plot_evolve(evolve_csv)
+        # LOGGER.info(f'Hyperparameter evolution finished {opt.evolve} generations\n'
+        #             f"Results saved to {colorstr('bold', save_dir)}\n"
+        #             f'Usage example: $ python train.py --hyp {evolve_yaml}')
 
 
 def run(**kwargs):
