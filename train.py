@@ -317,14 +317,15 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             #     if sf != 1:
             #         ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
             #         imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
-
+            if epoch < 3:
+                print(targets[0])
+                print(targets[1])
+                print(imgs[0,0,0])
             
             pred = model(imgs)
             loss, loss_items = compute_loss(pred, targets.to(device))
             loss.backward()
-            if epoch < 3:
-                print(targets[0])
-                print(targets[1])
+            
             # Forward
             # with torch.cuda.amp.autocast(amp):
             #     pred = model(imgs)  # forward
