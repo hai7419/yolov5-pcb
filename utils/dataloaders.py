@@ -743,6 +743,7 @@ class LoadImagesAndLabels(Dataset):
         #     return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
         # return self.ims[i], self.im_hw0[i], self.im_hw[i]  # im, hw_original, hw_resized
 
+        print(f'im file index is{i}')
         im = cv2.imread(self.im_files[i])
         h0,w0 = im.shape[:2]  #[h,w,c]
         r = self.img_size / max(h0,w0)
