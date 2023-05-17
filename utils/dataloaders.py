@@ -511,6 +511,12 @@ class LoadImagesAndLabels(Dataset):
         self.im_files = list(cache.keys())  # update
         self.label_files = img2label_paths(cache.keys())  # update
 
+
+        print(f'labels 0 is {self.labels[0]}')
+        print(f'labels 1 is {self.labels[1]}')
+        print(f'labels 2 is {self.labels[2]}')
+        print(f'labels 3 is {self.labels[3]}')
+
         # Filter images
         if min_items:
             include = np.array([len(x) >= min_items for x in self.labels]).nonzero()[0].astype(int)
