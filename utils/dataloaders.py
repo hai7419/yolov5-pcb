@@ -485,6 +485,16 @@ class LoadImagesAndLabels(Dataset):
         # Check cache
         self.label_files = img2label_paths(self.im_files)  # labels
         cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix('.cache')
+        print(f'lab file is {self.label_files[0]}')
+        print(f'lab file is {self.label_files[1]}')
+        print(f'lab file is {self.label_files[2]}')
+        print(f'lab file is {self.label_files[3]}')
+
+        print(f'im file is {self.im_files[0]}')
+        print(f'im file is {self.im_files[1]}')
+        print(f'im file is {self.im_files[2]}')
+        print(f'im file is {self.im_files[3]}')
+
         # try:
         #     cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
         #     assert cache['version'] == self.cache_version  # matches current version
