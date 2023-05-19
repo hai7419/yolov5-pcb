@@ -584,24 +584,24 @@ class LoadImagesAndLabels(Dataset):
             self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(int) * stride
 
         # Cache images into RAM/disk for faster training
-        # if cache_images == 'ram' and not self.check_cache_ram(prefix=prefix):
-        #     cache_images = False
-        # self.ims = [None] * n
-        # self.npy_files = [Path(f).with_suffix('.npy') for f in self.im_files]
-        # if cache_images:
-        #     b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
-        #     self.im_hw0, self.im_hw = [None] * n, [None] * n
-        #     fcn = self.cache_images_to_disk if cache_images == 'disk' else self.load_image
-        #     results = ThreadPool(NUM_THREADS).imap(fcn, range(n))
-        #     pbar = tqdm(enumerate(results), total=n, bar_format=TQDM_BAR_FORMAT, disable=LOCAL_RANK > 0)
-        #     for i, x in pbar:
-        #         if cache_images == 'disk':
-        #             b += self.npy_files[i].stat().st_size
-        #         else:  # 'ram'
-        #             self.ims[i], self.im_hw0[i], self.im_hw[i] = x  # im, hw_orig, hw_resized = load_image(self, i)
-        #             b += self.ims[i].nbytes
-        #         pbar.desc = f'{prefix}Caching images ({b / gb:.1f}GB {cache_images})'
-        #     pbar.close()
+        if cache_images == 'ram' and not self.check_cache_ram(prefix=prefix):
+            cache_images = False
+        self.ims = [None] * n
+        self.npy_files = [Path(f).with_suffix('.npy') for f in self.im_files]
+        if cache_images:
+            b, gb = 0, 1 << 30  # bytes of cached images, bytes per gigabytes
+            self.im_hw0, self.im_hw = [None] * n, [None] * n
+            fcn = self.cache_images_to_disk if cache_images == 'disk' else self.load_image
+            results = ThreadPool(NUM_THREADS).imap(fcn, range(n))
+            pbar = tqdm(enumerate(results), total=n, bar_format=TQDM_BAR_FORMAT, disable=LOCAL_RANK > 0)
+            for i, x in pbar:
+                if cache_images == 'disk':
+                    b += self.npy_files[i].stat().st_size
+                else:  # 'ram'
+                    self.ims[i], self.im_hw0[i], self.im_hw[i] = x  # im, hw_orig, hw_resized = load_image(self, i)
+                    b += self.ims[i].nbytes
+                pbar.desc = f'{prefix}Caching images ({b / gb:.1f}GB {cache_images})'
+            pbar.close()
 
     def check_cache_ram(self, safety_margin=0.1, prefix=''):
         # Check image caching requirements vs available memory
@@ -744,29 +744,29 @@ class LoadImagesAndLabels(Dataset):
 
     def load_image(self, i):
         # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
-        # im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i],
-        # if im is None:  # not cached in RAM
-        #     if fn.exists():  # load npy
-        #         im = np.load(fn)
-        #     else:  # read image
-        #         im = cv2.imread(f)  # BGR
-        #         assert im is not None, f'Image Not Found {f}'
-        #     h0, w0 = im.shape[:2]  # orig hw
-        #     r = self.img_size / max(h0, w0)  # ratio
-        #     if r != 1:  # if sizes are not equal
-        #         interp = cv2.INTER_LINEAR if (self.augment or r > 1) else cv2.INTER_AREA
-        #         im = cv2.resize(im, (math.ceil(w0 * r), math.ceil(h0 * r)), interpolation=interp)
-        #     return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
-        # return self.ims[i], self.im_hw0[i], self.im_hw[i]  # im, hw_original, hw_resized
+        im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i],
+        if im is None:  # not cached in RAM
+            if fn.exists():  # load npy
+                im = np.load(fn)
+            else:  # read image
+                im = cv2.imread(f)  # BGR
+                assert im is not None, f'Image Not Found {f}'
+            h0, w0 = im.shape[:2]  # orig hw
+            r = self.img_size / max(h0, w0)  # ratio
+            if r != 1:  # if sizes are not equal
+                interp = cv2.INTER_LINEAR if (self.augment or r > 1) else cv2.INTER_AREA
+                im = cv2.resize(im, (math.ceil(w0 * r), math.ceil(h0 * r)), interpolation=interp)
+            return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
+        return self.ims[i], self.im_hw0[i], self.im_hw[i]  # im, hw_original, hw_resized
 
-        print(f'im file index is{i}')
-        im = cv2.imread(self.im_files[i])
-        h0,w0 = im.shape[:2]  #[h,w,c]
-        r = self.img_size / max(h0,w0)
-        if r != 1:
-            im = cv2.resize(im,(math.ceil(w0 * r), math.ceil(h0 * r)),interpolation=cv2.INTER_AREA)
+        # print(f'im file index is{i}')
+        # im = cv2.imread(self.im_files[i])
+        # h0,w0 = im.shape[:2]  #[h,w,c]
+        # r = self.img_size / max(h0,w0)
+        # if r != 1:
+        #     im = cv2.resize(im,(math.ceil(w0 * r), math.ceil(h0 * r)),interpolation=cv2.INTER_AREA)
 
-        return im,(h0,w0),im.shape[:2]
+        # return im,(h0,w0),im.shape[:2]
 
     def cache_images_to_disk(self, i):
         # Saves an image as an *.npy file for faster loading
