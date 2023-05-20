@@ -292,8 +292,8 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             pbar = tqdm(pbar, total=nb, bar_format=TQDM_BAR_FORMAT)  # progress bar
         optimizer.zero_grad()
         for i, (imgs, targets, paths, _) in pbar:  # batch -------------------------------------------------------------
-            if epoch < 3:
-                draw_targets(imgs,targets)
+            # if epoch < 3:
+            #     draw_targets(imgs,targets)
             
             callbacks.run('on_train_batch_start')
             ni = i + nb * epoch  # number integrated batches (since train start)
@@ -320,10 +320,10 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             #     if sf != 1:
             #         ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
             #         imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
-            if epoch < 3:
-                print(targets[0])
-                print(targets[1])
-                print(imgs[0,0,0])
+            # if epoch < 3:
+            #     print(targets[0])
+            #     print(targets[1])
+            #     print(imgs[0,0,0])
             
             pred = model(imgs)
             loss, loss_items = compute_loss(pred, targets.to(device))
