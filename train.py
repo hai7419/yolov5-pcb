@@ -514,7 +514,7 @@ def draw_targets(img,labs):
             #draw.text(lb[k,2:4].numpy().astype(np.uint)+[0,-8],class_name[lb[k,1].numpy().astype(np.uint)],fill='red')
         del draw
         # im.show()
-        print(im.mode)
+        # print(im.mode)
         # im.save('D:\python\yolov5-mysely\ccc.jpg',format='png')
 
 
