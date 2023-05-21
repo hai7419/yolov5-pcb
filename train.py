@@ -320,15 +320,19 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             #     if sf != 1:
             #         ns = [math.ceil(x * sf / gs) * gs for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
             #         imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
-            # if epoch < 3:
-            #     print(targets[0])
-            #     print(targets[1])
-            #     print(imgs[0,0,0])
+            if epoch < 5:
+                print(targets[0])
+                print(targets[1])
+                print(imgs[0,0,0])
             
             pred = model(imgs)
+            if epoch < 5:
+                print(f'pred is{pred[0][0,0,0,5,:]}')
+            
             loss, loss_items = compute_loss(pred, targets.to(device))
             loss.backward()
-            
+            if epoch < 5:
+                print(f'loss is{loss}')
             # Forward
             # with torch.cuda.amp.autocast(amp):
             #     pred = model(imgs)  # forward
@@ -371,7 +375,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
         lr = [x['lr'] for x in optimizer.param_groups]  # for loggers
         scheduler.step()
 
-        if epoch == 30:
+        if epoch == 10:
             pass
         if epoch == 50:
             pass

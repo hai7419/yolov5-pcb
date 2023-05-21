@@ -290,8 +290,8 @@ def model_info(model, verbose=False, imgsz=640):
     except Exception:
         fs = ''
 
-    for layer in model.modules():
-        print(f'{layer}')
+    # for layer in model.modules():
+    #     print(f'{layer}')
 
 
     name = Path(model.yaml_file).stem.replace('yolov5', 'YOLOv5') if hasattr(model, 'yaml_file') else 'Model'
