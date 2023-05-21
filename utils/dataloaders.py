@@ -689,8 +689,8 @@ class LoadImagesAndLabels(Dataset):
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
 
-            if index <4:
-                print(f'index {index} labels is {labels}')
+            # if index <4:
+            #     print(f'index {index} labels is {labels}')
 
 
             # if self.augment:
@@ -705,8 +705,8 @@ class LoadImagesAndLabels(Dataset):
         nl = len(labels)  # number of labels
         if nl:
             labels[:, 1:5] = xyxy2xywhn(labels[:, 1:5], w=img.shape[1], h=img.shape[0], clip=True, eps=1E-3)
-        if index <4:
-                print(f'index {index} labels is {labels}')
+        # if index <4:
+        #         print(f'index {index} labels is {labels}')
 
 
         if self.augment:
@@ -741,8 +741,8 @@ class LoadImagesAndLabels(Dataset):
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
-        if index <4:
-            print(f'index {index} labels_out is {labels_out}')
+        # if index <4:
+        #     print(f'index {index} labels_out is {labels_out}')
         return torch.from_numpy(img), labels_out, self.im_files[index], shapes
 
     def load_image(self, i):
