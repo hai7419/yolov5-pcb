@@ -487,13 +487,10 @@ class LoadImagesAndLabels(Dataset):
         cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix('.cache')
         print(f'lab file is {self.label_files[0]}')
         print(f'lab file is {self.label_files[1]}')
-        print(f'lab file is {self.label_files[2]}')
-        print(f'lab file is {self.label_files[3]}')
-
+       
         print(f'im file is {self.im_files[0]}')
         print(f'im file is {self.im_files[1]}')
-        print(f'im file is {self.im_files[2]}')
-        print(f'im file is {self.im_files[3]}')
+       
 
         # try:
         #     cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
@@ -524,18 +521,16 @@ class LoadImagesAndLabels(Dataset):
 
         print(f'labels 0 is {self.labels[0]}')
         print(f'labels 1 is {self.labels[1]}')
-        print(f'labels 2 is {self.labels[2]}')
-        print(f'labels 3 is {self.labels[3]}')
-
+       
         # Filter images
-        if min_items:
-            include = np.array([len(x) >= min_items for x in self.labels]).nonzero()[0].astype(int)
-            LOGGER.info(f'{prefix}{n - len(include)}/{n} images filtered from dataset')
-            self.im_files = [self.im_files[i] for i in include]
-            self.label_files = [self.label_files[i] for i in include]
-            self.labels = [self.labels[i] for i in include]
-            self.segments = [self.segments[i] for i in include]
-            self.shapes = self.shapes[include]  # wh
+        # if min_items:
+        #     include = np.array([len(x) >= min_items for x in self.labels]).nonzero()[0].astype(int)
+        #     LOGGER.info(f'{prefix}{n - len(include)}/{n} images filtered from dataset')
+        #     self.im_files = [self.im_files[i] for i in include]
+        #     self.label_files = [self.label_files[i] for i in include]
+        #     self.labels = [self.labels[i] for i in include]
+        #     self.segments = [self.segments[i] for i in include]
+        #     self.shapes = self.shapes[include]  # wh
 
         # Create indices
         n = len(self.shapes)  # number of images
@@ -546,17 +541,17 @@ class LoadImagesAndLabels(Dataset):
         self.indices = range(n)
 
         # Update labels
-        include_class = []  # filter labels to include only these classes (optional)
-        self.segments = list(self.segments)
-        include_class_array = np.array(include_class).reshape(1, -1)
-        for i, (label, segment) in enumerate(zip(self.labels, self.segments)):
-            if include_class:
-                j = (label[:, 0:1] == include_class_array).any(1)
-                self.labels[i] = label[j]
-                if segment:
-                    self.segments[i] = [segment[idx] for idx, elem in enumerate(j) if elem]
-            if single_cls:  # single-class training, merge all classes into 0
-                self.labels[i][:, 0] = 0
+        # include_class = []  # filter labels to include only these classes (optional)
+        # self.segments = list(self.segments)
+        # include_class_array = np.array(include_class).reshape(1, -1)
+        # for i, (label, segment) in enumerate(zip(self.labels, self.segments)):
+        #     if include_class:
+        #         j = (label[:, 0:1] == include_class_array).any(1)
+        #         self.labels[i] = label[j]
+        #         if segment:
+        #             self.segments[i] = [segment[idx] for idx, elem in enumerate(j) if elem]
+        #     if single_cls:  # single-class training, merge all classes into 0
+        #         self.labels[i][:, 0] = 0
 
         # Rectangular Training
         if self.rect:
@@ -694,6 +689,10 @@ class LoadImagesAndLabels(Dataset):
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:], ratio[0] * w, ratio[1] * h, padw=pad[0], padh=pad[1])
 
+            if index <4:
+                print(f'index {index} labels is {labels}')
+
+
             # if self.augment:
             #     img, labels = random_perspective(img,
             #                                      labels,
@@ -706,6 +705,9 @@ class LoadImagesAndLabels(Dataset):
         nl = len(labels)  # number of labels
         if nl:
             labels[:, 1:5] = xyxy2xywhn(labels[:, 1:5], w=img.shape[1], h=img.shape[0], clip=True, eps=1E-3)
+        if index <4:
+                print(f'index {index} labels is {labels}')
+
 
         if self.augment:
             pass
@@ -739,7 +741,8 @@ class LoadImagesAndLabels(Dataset):
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
         img = np.ascontiguousarray(img)
-
+        if index <4:
+            print(f'index {index} labels_out is {labels_out}')
         return torch.from_numpy(img), labels_out, self.im_files[index], shapes
 
     def load_image(self, i):
