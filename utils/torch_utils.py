@@ -277,8 +277,8 @@ def model_info(model, verbose=False, imgsz=640):
         print(f"{'layer':>5} {'name':>40} {'gradient':>9} {'parameters':>12} {'shape':>20} {'mu':>10} {'sigma':>10}")
         for i, (name, p) in enumerate(model.named_parameters()):
             name = name.replace('module_list.', '')
-            print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
-                  (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
+            # print('%5g %40s %9s %12g %20s %10.3g %10.3g' %
+            #       (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
 
     try:  # FLOPs
         p = next(model.parameters())
